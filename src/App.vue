@@ -184,23 +184,46 @@ export default {
     };
   },
 
+  created() {
+    this.getCoinlist();
+
+    const tickersData = localStorage.getItem("cryptonomicon-list");
+    if (tickersData) {
+      this.tickers = JSON.parse(tickersData);
+      this.tickers.map(ticker => this.subscribeToUpdates(ticker.name));
+    }
+  },
+
   methods: {
+    getCoinlist() {
+      fetch(`https://min-api.cryptocompare.com/data/all/coinlist?summary=true`)
+        .then(response => response.json())
+        .then(data => (this.coinlist = Object.keys(data.Data)))
+        .catch(error => console.log(error));
+    },
+
+    subscribeToUpdates(tickerName) {
+      setInterval(async () => {
+        const response = await fetch(
+          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD`
+        );
+        const data = await response.json();
+        this.tickers.find(t => t.name === tickerName).price =
+          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+        if (this.selectedTicker?.name === tickerName) {
+          this.graph.push(data.USD);
+        }
+      }, 2000);
+    },
+
     add() {
       const currentTicker = { name: this.ticker.toUpperCase(), price: "-" };
       if (this.isAdded()) {
         return;
       }
       this.tickers.push(currentTicker);
-      setInterval(async () => {
-        const response = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${currentTicker.name}&tsyms=USD`
-        );
-        const data = await response.json();
-        this.tickers.find(t => t.name === currentTicker.name).price =
-          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-        if (this.selectedTicker?.name === currentTicker.name)
-          this.graph.push(data.USD);
-      }, 2000);
+      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
+      this.subscribeToUpdates(currentTicker.name);
       this.ticker = "";
     },
 
@@ -211,6 +234,7 @@ export default {
 
     handleDelete(tickerToRemove) {
       this.tickers = this.tickers.filter(t => t != tickerToRemove);
+      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
     },
 
     normalizeGraph() {
@@ -233,13 +257,6 @@ export default {
 
       return arr.slice(0, 4);
     }
-  },
-
-  created() {
-    fetch(`https://min-api.cryptocompare.com/data/all/coinlist?summary=true`)
-      .then(response => response.json())
-      .then(data => (this.coinlist = Object.keys(data.Data)))
-      .catch(error => console.log(error));
   }
 };
 </script>
